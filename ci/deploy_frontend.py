@@ -21,8 +21,8 @@ def main():
 
     # 2. Check that we are deploying to a classroom bucket.
     bucket_name = os.environ["HR_STAGING_FRONTEND_BUCKET"]
-    if not bucket_name.startswith("hr-ci-"):
-        raise SystemExit("Use the lab bucket with an hr-ci- prefix.")
+    if not bucket_name.startswith("hr-rag-lab-frontend-"):
+        raise SystemExit("Use the lab frontend bucket with an hr-rag-lab-frontend- prefix.")
 
     # 3. Upload each website file, with its browser content type.
     s3 = boto3.client("s3")
