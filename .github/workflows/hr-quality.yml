@@ -214,3 +214,58 @@ jobs:                                                                   # stages
             build/deepeval.json
             build/quality.json
           retention-days: 3                                             # keep 3 days
+
+  production-handoff-dry-run:                                           # job
+    name: Production handoff (dry run)                                  # job title
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: candidate                                                    # depends on candidate
+    runs-on: ubuntu-24.04                                               # agent
+    environment: hr-production-approval                                 # approval gate
+    permissions:                                                        # token rights
+      contents: read                                                    # read-only code
+    steps:                                                              # steps
+      - uses: actions/download-artifact@v8                              # get artifacts
+        with:
+          name: hr-candidate-evidence                                   # artifact name
+          path: evidence                                                # folder
+      - name: Verify exact tested release and show production handoff
+        env:                                                            # step variables
+          EXPECTED_COMMIT: ${{ github.sha }}                            # tested commit
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          release=json.loads(Path('evidence/release.json').read_text())
+          report=Path('evidence/report.md').read_text()
+          if release['commit'] != os.environ['EXPECTED_COMMIT']:
+              raise SystemExit('Release does not match the merged commit')
+          if 'Release gate: PASS.' not in report:
+              raise SystemExit('A passing evaluation report is required')
+          print('DEMONSTRATION ONLY: production would receive the tested backend artifact and exact prompt version.')
+          print('React would be built from this same commit with production configuration.')
+          print('No production resources or traffic are changed by this dry-run job.')
+          PY
+  # Name the approved release in Git: tag the tested commit with its VERSION number.
+  tag-release:                                                          # job
+    name: Tag the approved release                                      # job title
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  # run condition
+    needs: candidate                                                    # depends on candidate
+    runs-on: ubuntu-24.04                                               # agent
+    permissions:                                                        # token rights
+      contents: write                                                   # may push a tag
+    steps:                                                              # steps
+      - uses: actions/checkout@v7                                       # get code
+        with:                                                           # inputs
+          fetch-depth: 0                                                # all history and release tags
+      - uses: actions/setup-python@v7                                   # install Python
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8                              # get artifacts
+        with:
+          name: hr-candidate-evidence                                   # artifact name
+          path: evidence                                                # folder
+      - name: Tag the tested commit with its release number             # step title
+        env:                                                            # step variables
+          EXPECTED_COMMIT: ${{ github.sha }}                            # tested commit
+        run: python ci/tag_release.py                                   # create and push the tag
+
